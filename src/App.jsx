@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { listSkills, deleteSkill } from './api.js';
+import { listSkills, deleteSkill, sb } from './api.js';
 import SkillCard from './components/SkillCard.jsx';
 import UploadModal from './components/UploadModal.jsx';
 import DetailView from './components/DetailView.jsx';
@@ -7,6 +7,7 @@ import DetailView from './components/DetailView.jsx';
 export default function App() {
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [query, setQuery] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [showUpload, setShowUpload] = useState(false);
@@ -17,8 +18,9 @@ export default function App() {
     try {
       const data = await listSkills(query, tagFilter);
       setSkills(data);
+      setLoadError('');
     } catch (e) {
-      setToast('加载失败：' + e.message);
+      setLoadError(e.message);
     } finally {
       setLoading(false);
     }
@@ -97,6 +99,25 @@ export default function App() {
               #{t}
             </button>
           ))}
+        </div>
+      )}
+
+      {!sb && (
+        <div className="banner warn">
+          ⚠️ <b>Supabase 未配置</b>：请在 Netlify 环境变量中添加
+          <code>VITE_SUPABASE_URL</code> 和 <code>VITE_SUPABASE_ANON_KEY</code>
+          （值从 Supabase → Settings → API 复制），然后重新部署。
+        </div>
+      )}
+
+      {loadError && (
+        <div className="banner error">
+          <b>加载失败：</b>{loadError}
+          <div className="muted small">
+            排查：① 确认 Netlify 构建日志成功且 Functions 已部署（Site → Functions 应看到
+            skills / skill / skill-file）② 确认 <code>/api/*</code> 重写生效 ③ 检查浏览器
+            Network 面板里 <code>/api/skills</code> 的响应。
+          </div>
         </div>
       )}
 

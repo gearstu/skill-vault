@@ -20,6 +20,12 @@ body {
 
 .app { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
 
+.banner { padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 14px; line-height: 1.6; }
+.banner.warn { background: #fff8e6; border: 1px solid #f0d48a; color: #7a5b00; }
+.banner.error { background: #fdecec; border: 1px solid #f0b4b4; color: #8c1d1d; }
+.banner code { background: rgba(0,0,0,.07); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+.small { font-size: 12px; margin-top: 6px; color: inherit; opacity: .85; }
+
 /* top bar */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;

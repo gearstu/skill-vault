@@ -14,7 +14,12 @@ export const sb =
   SUPABASE_URL && ANON_KEY ? createClient(SUPABASE_URL, ANON_KEY) : null;
 
 async function req(url, options = {}) {
-  const res = await fetch(url, options);
+  let res;
+  try {
+    res = await fetch(url, options);
+  } catch (e) {
+    throw new Error('网络错误：' + e.message);
+  }
   const ct = res.headers.get('content-type') || '';
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
@@ -24,7 +29,12 @@ async function req(url, options = {}) {
     } catch { /* ignore */ }
     throw new Error(msg);
   }
-  return ct.includes('application/json') ? res.json() : res;
+  if (!ct.includes('application/json')) {
+    throw new Error(
+      `接口返回异常（HTTP ${res.status}，不是 JSON）——请确认 Netlify Functions 已部署、/api 重写规则生效`,
+    );
+  }
+  return res.json();
 }
 
 async function uploadToStorage(path, file, contentType) {
@@ -84,10 +94,15 @@ export async function patchSkill(id, { name, description, tags, previews = [] })
   });
 }
 
-export const listSkills = (q = '', tag = '') =>
-  req(`${API}/skills?q=${encodeURIComponent(q)}&tag=${encodeURIComponent(tag)}`);
+export const listSkills = async (q = '', tag = '') => {
+  const data = await req(`${API}/skills?q=${encodeURIComponent(q)}&tag=${encodeURIComponent(tag)}`);
+  return Array.isArray(data) ? data : [];
+};
 
-export const getSkill = (id) => req(`${API}/skills/${id}`);
+export const getSkill = async (id) => {
+  const data = await req(`${API}/skills/${id}`);
+  return data && typeof data === 'object' ? data : null;
+};
 
 export const deleteSkill = (id) =>
   req(`${API}/skills/${id}`, { method: 'DELETE' });
@@ -96,6 +111,6 @@ export const fileUrl = (id, path) =>
   `${API}/skills/${id}/file?path=${encodeURIComponent(path)}`;
 
 export const storageUrl = (path) =>
-  `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
+  SUPABASE_URL ? `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}` : null;
 
 export const downloadUrl = (path) => storageUrl(path);

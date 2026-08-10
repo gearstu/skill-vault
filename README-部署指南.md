@@ -56,18 +56,43 @@ netlify login
 netlify deploy --prod --build
 ```
 
-### 3. 环境变量（Netlify → Site settings → Environment variables）
+### 3. 环境变量（Netlify → Site configuration → Environment variables）
 
-| 变量 | 值 | 谁用 |
+**需要 5 个变量，其中 2 个是 `VITE_` 前缀（构建时注入前端）。**
+
+| 变量 | 值从哪拿 | 谁用 |
 |---|---|---|
-| `SUPABASE_URL` | Supabase Project URL | Functions |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role key | Functions |
-| `SKILL_BUCKET` | `skillvault`（默认，可省略） | Functions |
-| `VITE_SUPABASE_URL` | Supabase Project URL（**需以 `VITE_` 开头**） | 前端（直传 Storage + 预览图） |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key（**需以 `VITE_` 开头**） | 前端（直传 Storage） |
+| `SUPABASE_URL` | Supabase → Settings → API → **Project URL** | Functions |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → **Project API keys → `service_role`** | Functions |
+| `SKILL_BUCKET` | 固定写 `skillvault`（与 schema.sql 一致，可省略） | Functions |
+| `VITE_SUPABASE_URL` | 同上 Project URL | 前端（直传 Storage + 预览图） |
+| `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API → **Project API keys → `anon public`** | 前端（直传 Storage） |
 
-> `VITE_*` 变量会在构建时打进前端代码，必须手动在 Netlify 配置（不要提交进仓库）。
-> `anon` key 在 Supabase **Settings → API**（`Project API keys` 的 `anon public` 行）。它是公开给前端的，配合 schema 里的公开 RLS 策略即可让浏览器直传 Storage。
+**在 Netlify 添加变量（一步步）：**
+1. 打开你的站点 → **Site configuration**（左侧）→ **Environment variables**
+2. 点 **Add a variable**
+3. **Key** 填变量名，**Value** 填对应值（见下面示例）
+4. 逐个添加 5 个变量（VITE_ 前缀的 2 个一定不能写错前缀）
+5. 添加完后：**Deploys**（左侧）→ 右上 **Trigger deploy** → **Deploy site**（必须重新部署，让 VITE_ 变量打进前端代码）
+
+**示例值（换成你自己的）：**
+
+```
+SUPABASE_URL=https://abcdefghijklm.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.super_long_service_role_secret_abc123...
+SKILL_BUCKET=skillvault
+VITE_SUPABASE_URL=https://abcdefghijklm.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.anon_public_key_xyz789...
+```
+
+> **常见错误（会导致页面白屏或上传失败）：**
+> - 只配了 `VITE_SUPABASE_URL` 忘了 `VITE_SUPABASE_ANON_KEY`（或反过来）→ 前端拿不到 Storage 直传能力
+> - `VITE_` 前缀拼错（如 `VITE-SUPABASE_URL`、`vite_supabase_url`）→ 变量不会注入前端
+> - 值里多了空格/换行（复制 key 时带入）→ 构建或运行时异常
+> - 配完**没触发重新部署** → 前端还是旧代码（没有 VITE_ 变量）
+> - **添加变量后看构建日志**：Deploys → 最新一次 → Deploy log，成功应显示 `Functions bundling` 和 3 个函数名（skills / skill / skill-file）
+
+**本地调试**：复制 `.env.example` 为 `.env`，填真实值，`netlify dev` 会同时读 `VITE_*`（前端）和普通变量（Functions）。
 
 ### 4. 验证
 
