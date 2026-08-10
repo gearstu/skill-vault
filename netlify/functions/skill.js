@@ -1,20 +1,24 @@
 // GET    /api/skills/:id      - fetch one skill
 // PATCH  /api/skills/:id      - update metadata / preview images (JSON)
 // DELETE /api/skills/:id      - remove skill + storage files
+// Netlify Functions v2 signature: (req: Request, context) => Response
 import { supabase, BUCKET, json, err } from './_lib.js';
 
-export default async (event) => {
+export default async (req) => {
   try {
-    const id = (event.path || '').split('/').filter(Boolean).pop();
+    const url = new URL(req.url);
+    const id = url.pathname.split('/').filter(Boolean).pop();
     if (!id) return err('missing id', 400);
 
-    if (event.httpMethod === 'GET') {
+    const method = (req.method || 'GET').toUpperCase();
+
+    if (method === 'GET') {
       const { data, error } = await supabase.from('skills').select('*').eq('id', id).single();
       if (error) return err('not found', 404);
       return json(data);
     }
 
-    if (event.httpMethod === 'DELETE') {
+    if (method === 'DELETE') {
       const { data: row, error: getErr } = await supabase.from('skills').select('*').eq('id', id).single();
       if (getErr) return err('not found', 404);
       await supabase.storage.from(BUCKET).remove([row.zip_path, ...(row.preview_images || [])]);
@@ -23,10 +27,10 @@ export default async (event) => {
       return json({ ok: true });
     }
 
-    if (event.httpMethod === 'PATCH') {
+    if (method === 'PATCH') {
       let body;
       try {
-        body = JSON.parse(event.body || '{}');
+        body = await req.json();
       } catch {
         return err('invalid JSON body');
       }

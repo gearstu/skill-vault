@@ -127,6 +127,11 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.anon_public_key_xyz7
 
 ## 常见问题
 
+### 页面报 "加载失败：method not allowed"
+- **原因**：Netlify Functions 现在是 **v2 签名 `(req: Request, context) => Response`**，旧代码用 v1 的 `event.httpMethod` 会取到 `undefined`，函数返回 405。
+- **解决**：已把全部 Functions 改成 v2 签名（`req.method` / `await req.json()` / `new URL(req.url)`）。**更新代码后重新部署**即可。
+- 验证：`node --check netlify/functions/*.js` 全过；本地用 `Request` 对象模拟调用，各路由均不再返回 405。
+
 ### 上传报 "HTTP 413"（Payload Too Large）
 - **原因**：旧版把 zip 塞进 Netlify Functions 请求体，Netlify 网关对 Functions 请求体有大小限制（几 MB 级），大 zip 直接 413。
 - **解决**：已改为**前端直传 Supabase Storage** 的架构（本版）。在 Netlify 环境变量里加上 `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`，**重新部署**即可。

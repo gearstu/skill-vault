@@ -1,16 +1,14 @@
 // POST /api/skills  - create a skill (JSON body: file already in Storage, server parses zip)
 // GET  /api/skills  - list skills (?q= search, ?tag= filter)
+// Netlify Functions v2 signature: (req: Request, context) => Response
 import AdmZip from 'adm-zip';
 import { supabase, BUCKET, json, err, buildTree, isSafeEntry, downloadZip } from './_lib.js';
 
-export default async (event) => {
+export default async (req) => {
   try {
-    if (event.httpMethod === 'GET') {
-      return await list(event);
-    }
-    if (event.httpMethod === 'POST') {
-      return await create(event);
-    }
+    const method = (req.method || 'GET').toUpperCase();
+    if (method === 'GET') return await list(req);
+    if (method === 'POST') return await create(req);
     return err('method not allowed', 405);
   } catch (e) {
     console.error('skills error:', e);
@@ -18,8 +16,8 @@ export default async (event) => {
   }
 };
 
-async function list(event) {
-  const url = new URL(event.url);
+async function list(req) {
+  const url = new URL(req.url);
   const q = (url.searchParams.get('q') || '').trim();
   const tag = (url.searchParams.get('tag') || '').trim();
   let query = supabase.from('skills').select('*').order('created_at', { ascending: false });
@@ -39,14 +37,14 @@ async function list(event) {
   return json(rows);
 }
 
-async function create(event) {
+async function create(req) {
   let body;
   try {
-    body = JSON.parse(event.body || '{}');
+    body = await req.json();
   } catch {
     return err('invalid JSON body');
   }
-  const { id, name, description, tags, zip_path, preview_images } = body;
+  const { id, name, description, tags, zip_path, preview_images } = body || {};
   if (!name || !String(name).trim()) return err('name is required');
   if (!zip_path) return err('zip_path is required');
 

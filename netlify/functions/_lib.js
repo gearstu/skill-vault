@@ -1,6 +1,5 @@
-// Shared helpers for Skill Vault Netlify Functions
+// Shared helpers for Skill Vault Netlify Functions (v2 style: (req, context))
 import { createClient } from '@supabase/supabase-js';
-import Busboy from 'busboy';
 
 export const SUPABASE_URL = process.env.SUPABASE_URL;
 export const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -11,40 +10,11 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 });
 
 export function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return Response.json(data, { status });
 }
 
 export function err(message, status = 400) {
-  return json({ error: message }, status);
-}
-
-// Parse multipart/form-data body -> { fields: {}, files: { name: [{filename, buffer}] } }
-export function parseMultipart(event) {
-  return new Promise((resolve, reject) => {
-    const contentType = event.headers['content-type'] || '';
-    const raw = event.isBase64Encoded
-      ? Buffer.from(event.body, 'base64')
-      : Buffer.from(event.body || '');
-    const bb = Busboy({ headers: { 'content-type': contentType }, limits: { fileSize: 100 * 1024 * 1024 } });
-    const fields = {};
-    const files = {};
-    bb.on('field', (name, val) => {
-      fields[name] = val;
-    });
-    bb.on('file', (name, stream, info) => {
-      const chunks = [];
-      stream.on('data', (d) => chunks.push(d));
-      stream.on('end', () => {
-        (files[name] ||= []).push({ filename: info.filename || 'file', mimeType: info.mimeType, buffer: Buffer.concat(chunks) });
-      });
-    });
-    bb.on('error', reject);
-    bb.on('finish', () => resolve({ fields, files }));
-    bb.end(raw);
-  });
+  return Response.json({ error: message }, { status });
 }
 
 // Build nested directory tree from adm-zip entries

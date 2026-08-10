@@ -1,5 +1,6 @@
 // GET /api/skills/:id/file?path=relative/path/in/zip
 // Streams a single file's content out of the stored zip archive.
+// Netlify Functions v2 signature: (req: Request, context) => Response
 import AdmZip from 'adm-zip';
 import { supabase, BUCKET, err } from './_lib.js';
 
@@ -13,10 +14,10 @@ const MIME = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp',
 };
 
-export default async (event) => {
+export default async (req) => {
   try {
-    const id = (event.path || '').split('/').filter(Boolean).pop();
-    const url = new URL(event.url);
+    const url = new URL(req.url);
+    const id = url.pathname.split('/').filter(Boolean).pop();
     const rel = url.searchParams.get('path');
     if (!id || !rel) return err('missing id or path', 400);
 
@@ -35,7 +36,7 @@ export default async (event) => {
     const isText = TEXT_EXT.test(ext) || isProbablyText(content);
     const mime = MIME[ext] || (isText ? 'text/plain' : 'application/octet-stream');
 
-    return new Response(isText ? content : content, {
+    return new Response(content, {
       status: 200,
       headers: {
         'Content-Type': mime,
