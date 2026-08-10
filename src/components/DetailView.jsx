@@ -1,6 +1,35 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { marked } from 'marked';
+import { markedHighlight } from 'marked-highlight';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github.css';
 import FileTree from './FileTree.jsx';
 import { downloadUrl, fileUrl, patchSkill } from '../api.js';
+
+marked.use(
+  markedHighlight({
+    langPrefix: 'hljs language-',
+    highlight(code, lang) {
+      const language = hljs.getLanguage(lang) ? lang : '';
+      return language ? hljs.highlight(code, { language }).value : hljs.highlightAuto(code).value;
+    },
+  }),
+);
+
+// extension -> highlight.js language name
+const LANG_MAP = {
+  py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
+  mjs: 'javascript', cjs: 'javascript', sh: 'bash', bash: 'bash', zsh: 'bash',
+  rb: 'ruby', go: 'go', rs: 'rust', c: 'c', h: 'c', cpp: 'cpp', java: 'java',
+  kt: 'kotlin', swift: 'swift', php: 'php', sql: 'sql', html: 'xml', xml: 'xml',
+  css: 'css', scss: 'scss', json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'ini',
+  ini: 'ini', dockerfile: 'dockerfile', lua: 'lua', r: 'r', perl: 'perl',
+};
+
+const langFromPath = (path) => {
+  const ext = (path.match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase() || '';
+  return LANG_MAP[ext] || null;
+};
 
 export default function DetailView({ skill, onClose, onDeleted, onChanged }) {
   const [editing, setEditing] = useState(false);
@@ -24,12 +53,21 @@ export default function DetailView({ skill, onClose, onDeleted, onChanged }) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const mime = res.headers.get('content-type') || '';
       const buf = await res.arrayBuffer();
+      const bytes = new Uint8Array(buf);
       const isImage = mime.startsWith('image/');
-      setFileMeta({
-        isImage,
-        mime,
-        content: isImage ? URL.createObjectURL(new Blob([buf], { type: mime })) : new TextDecoder().decode(buf),
-      });
+      if (isImage) {
+        setFileMeta({ isImage, mime, content: URL.createObjectURL(new Blob([buf], { type: mime })) });
+      } else {
+        // decode utf-8, fall back to gbk if replacement chars appear (some skill files are GBK)
+        let text = new TextDecoder('utf-8').decode(bytes);
+        if (text.includes('\uFFFD')) {
+          try {
+            const gbk = new TextDecoder('gbk').decode(bytes);
+            if (!gbk.includes('\uFFFD')) text = gbk;
+          } catch { /* keep utf-8 */ }
+        }
+        setFileMeta({ isImage: false, mime, content: text });
+      }
     } catch (e) {
       setFileMeta({ isImage: false, content: '读取失败：' + e.message, mime: 'text/plain' });
     } finally {
@@ -75,6 +113,34 @@ export default function DetailView({ skill, onClose, onDeleted, onChanged }) {
   };
 
   const zipHref = downloadUrl(skill.zip_path);
+
+  const renderContent = () => {
+    if (!fileMeta) return null;
+    if (fileMeta.isImage) {
+      return <img src={fileMeta.content} alt={selectedPath} className="file-img" />;
+    }
+    const isMd = fileMeta.mime === 'text/markdown' || /\.(md|markdown)$/i.test(selectedPath || '');
+    if (isMd) {
+      return (
+        <div
+          className="md-body"
+          dangerouslySetInnerHTML={{ __html: marked.parse(fileMeta.content) }}
+        />
+      );
+    }
+    const lang = langFromPath(selectedPath || '');
+    const html = lang
+      ? hljs.highlight(fileMeta.content, { language: lang }).value
+      : hljs.highlightAuto(fileMeta.content).value;
+    return (
+      <pre className="code-block">
+        <code
+          className={`hljs${lang ? ` language-${lang}` : ''}`}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      </pre>
+    );
+  };
 
   return (
     <div className="detail-mask">
@@ -149,13 +215,7 @@ export default function DetailView({ skill, onClose, onDeleted, onChanged }) {
           <div className="file-col">
             <h4 className="file-title">{selectedPath || '选择一个文件查看'}</h4>
             {loadingFile && <div className="muted">读取中…</div>}
-            {fileMeta && !loadingFile && (
-              fileMeta.isImage ? (
-                <img src={fileMeta.content} alt={selectedPath} className="file-img" />
-              ) : (
-                <pre className="file-text">{fileMeta.content}</pre>
-              )
-            )}
+            {fileMeta && !loadingFile && renderContent()}
           </div>
         </div>
       </div>

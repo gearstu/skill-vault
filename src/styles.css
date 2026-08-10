@@ -164,6 +164,36 @@ body {
   padding: 14px; min-height: 60vh; max-height: 75vh; overflow: auto;
 }
 .file-title { word-break: break-all; }
+
+/* markdown rendered body */
+.md-body { font-size: 14px; line-height: 1.75; padding: 6px 4px 20px; }
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 { margin: 1.2em 0 0.6em; line-height: 1.3; }
+.md-body h1 { font-size: 1.7em; border-bottom: 1px solid var(--line); padding-bottom: 0.3em; }
+.md-body h2 { font-size: 1.4em; border-bottom: 1px solid var(--line); padding-bottom: 0.25em; }
+.md-body h3 { font-size: 1.2em; }
+.md-body p { margin: 0.6em 0; }
+.md-body ul, .md-body ol { margin: 0.6em 0; padding-left: 1.6em; }
+.md-body li { margin: 0.25em 0; }
+.md-body code { background: rgba(79,110,247,.08); padding: 1px 5px; border-radius: 4px; font-size: 13px; font-family: 'SF Mono', Consolas, Menlo, monospace; }
+.md-body pre { background: #f6f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 0.8em 0; }
+.md-body pre code { background: none; padding: 0; }
+.md-body blockquote { border-left: 3px solid var(--primary); padding: 4px 14px; color: var(--muted); margin: 0.8em 0; background: #f7f8fc; border-radius: 0 8px 8px 0; }
+.md-body table { border-collapse: collapse; margin: 0.8em 0; }
+.md-body th, .md-body td { border: 1px solid var(--line); padding: 6px 12px; }
+.md-body th { background: #f1f3fa; }
+.md-body a { color: var(--primary); }
+.md-body img { max-width: 100%; border-radius: 8px; }
+.md-body hr { border: none; border-top: 1px solid var(--line); margin: 1.2em 0; }
+
+/* code block (highlight.js) */
+.code-block {
+  font-family: 'SF Mono', Consolas, Menlo, monospace;
+  font-size: 13px; line-height: 1.6;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  padding: 14px; overflow-x: auto;
+}
+.code-block code { background: none; padding: 0; }
+.hljs { background: transparent; }
 .file-text {
   font-family: 'SF Mono', Consolas, Menlo, monospace; font-size: 13px; line-height: 1.6;
   white-space: pre-wrap; word-break: break-word; padding: 10px 4px;
