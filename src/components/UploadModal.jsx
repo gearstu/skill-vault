@@ -19,13 +19,7 @@ export default function UploadModal({ onClose, onUploaded }) {
     setBusy(true);
     setError('');
     try {
-      const fd = new FormData();
-      fd.append('name', name.trim());
-      fd.append('description', description.trim());
-      fd.append('tags', tags);
-      fd.append('zip', zip, zip.name);
-      for (const p of previews) fd.append('preview', p, p.name);
-      await uploadSkill(fd);
+      await uploadSkill({ name: name.trim(), description: description.trim(), tags, zip, previews });
       onUploaded();
     } catch (err) {
       setError('上传失败：' + err.message);

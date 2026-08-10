@@ -1,8 +1,7 @@
-// POST /api/skills  - upload a skill zip (+ preview images)
+// POST /api/skills  - create a skill (JSON body: file already in Storage, server parses zip)
 // GET  /api/skills  - list skills (?q= search, ?tag= filter)
 import AdmZip from 'adm-zip';
-import { supabase, BUCKET, json, err, parseMultipart, buildTree, isSafeEntry } from './_lib.js';
-import { randomUUID } from 'node:crypto';
+import { supabase, BUCKET, json, err, buildTree, isSafeEntry, downloadZip } from './_lib.js';
 
 export default async (event) => {
   try {
@@ -41,61 +40,40 @@ async function list(event) {
 }
 
 async function create(event) {
-  const { fields, files } = await parseMultipart(event);
-  const name = (fields.name || '').trim();
-  const description = (fields.description || '').trim();
-  const tags = (fields.tags || '')
-    .split(/[,，]/)
-    .map((t) => t.trim())
-    .filter(Boolean);
+  let body;
+  try {
+    body = JSON.parse(event.body || '{}');
+  } catch {
+    return err('invalid JSON body');
+  }
+  const { id, name, description, tags, zip_path, preview_images } = body;
+  if (!name || !String(name).trim()) return err('name is required');
+  if (!zip_path) return err('zip_path is required');
 
-  if (!name) return err('name is required');
-  const zips = files.zip || [];
-  if (zips.length !== 1) return err('exactly one .zip file is required');
-  const zipFile = zips[0];
-  if (!/\.zip$/i.test(zipFile.filename)) return err('file must be a .zip archive');
+  // Server downloads the zip from Storage and builds the file tree.
+  const buf = await downloadZip(zip_path);
+  if (!buf) return err('zip not found in storage', 404);
 
-  // validate + build tree
   let zip;
   try {
-    zip = new AdmZip(zipFile.buffer);
+    zip = new AdmZip(buf);
   } catch {
     return err('invalid zip archive');
   }
-  const entries = zip.getEntries().filter((e) => !e.entryName.endsWith('/') || e.isDirectory);
+  const entries = zip.getEntries();
   if (!entries.every((e) => isSafeEntry(e.entryName))) return err('zip contains unsafe paths');
 
-  const id = randomUUID();
-  const base = `skills/${id}`;
-  const zipPath = `${base}/${zipFile.filename.replace(/[^\w.\-]/g, '_')}`;
+  const row = {
+    id: id || undefined,
+    name: String(name).trim(),
+    description: String(description || '').trim(),
+    tags: Array.isArray(tags) ? tags : [],
+    preview_images: Array.isArray(preview_images) ? preview_images : [],
+    zip_path,
+    file_tree: buildTree(entries),
+  };
 
-  // upload zip
-  const { error: zipErr } = await supabase.storage.from(BUCKET).upload(zipPath, zipFile.buffer, {
-    contentType: 'application/zip',
-    upsert: true,
-  });
-  if (zipErr) return err('storage zip upload failed: ' + zipErr.message, 500);
-
-  // upload preview images
-  const previews = files.preview || [];
-  const previewPaths = [];
-  for (let i = 0; i < previews.length; i++) {
-    const p = previews[i];
-    const ext = (p.filename.match(/\.(png|jpe?g|gif|webp|svg)$/i) || [])[1] || 'png';
-    const path = `${base}/preview_${i}.${ext}`;
-    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, p.buffer, {
-      contentType: p.mimeType || 'image/png',
-      upsert: true,
-    });
-    if (upErr) return err('preview upload failed: ' + upErr.message, 500);
-    previewPaths.push(path);
-  }
-
-  const { data, error: insErr } = await supabase
-    .from('skills')
-    .insert({ id, name, description, tags, preview_images: previewPaths, zip_path: zipPath, file_tree: buildTree(entries) })
-    .select()
-    .single();
+  const { data, error: insErr } = await supabase.from('skills').insert(row).select().single();
   if (insErr) return err('db insert failed: ' + insErr.message, 500);
   return json(data, 201);
 }

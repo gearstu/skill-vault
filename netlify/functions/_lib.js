@@ -95,3 +95,10 @@ export function isSafeEntry(entryName) {
 export function storageUrl(path) {
   return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
 }
+
+// Download a file from storage -> Buffer (or null if missing)
+export async function downloadZip(path) {
+  const { data, error } = await supabase.storage.from(BUCKET).download(path);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
+}

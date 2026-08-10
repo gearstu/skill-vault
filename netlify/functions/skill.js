@@ -1,7 +1,7 @@
 // GET    /api/skills/:id      - fetch one skill
-// PATCH  /api/skills/:id      - update metadata (+ optional preview images, multipart)
+// PATCH  /api/skills/:id      - update metadata / preview images (JSON)
 // DELETE /api/skills/:id      - remove skill + storage files
-import { supabase, BUCKET, json, err, parseMultipart } from './_lib.js';
+import { supabase, BUCKET, json, err } from './_lib.js';
 
 export default async (event) => {
   try {
@@ -24,35 +24,31 @@ export default async (event) => {
     }
 
     if (event.httpMethod === 'PATCH') {
-      const { fields, files } = await parseMultipart(event);
+      let body;
+      try {
+        body = JSON.parse(event.body || '{}');
+      } catch {
+        return err('invalid JSON body');
+      }
+      const { data: row, error: getErr } = await supabase.from('skills').select('*').eq('id', id).single();
+      if (getErr) return err('not found', 404);
+
       const updates = {};
-      if (fields.name !== undefined) updates.name = fields.name.trim() || undefined;
-      if (fields.description !== undefined) updates.description = fields.description.trim();
-      if (fields.tags !== undefined) {
-        updates.tags = fields.tags.split(/[,，]/).map((t) => t.trim()).filter(Boolean);
+      if (body.name !== undefined) updates.name = String(body.name).trim() || row.name;
+      if (body.description !== undefined) updates.description = String(body.description).trim();
+      if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags : [];
+
+      // Preview images: new array replaces old ones; remove stale files from storage.
+      if (Array.isArray(body.preview_images)) {
+        const newPaths = body.preview_images.filter(Boolean);
+        const oldPaths = (row.preview_images || []).filter((p) => !newPaths.includes(p));
+        if (oldPaths.length > 0) await supabase.storage.from(BUCKET).remove(oldPaths);
+        updates.preview_images = newPaths;
       }
-      const previews = files.preview || [];
-      if (previews.length > 0) {
-        const { data: row, error: getErr } = await supabase.from('skills').select('*').eq('id', id).single();
-        if (getErr) return err('not found', 404);
-        const old = row.preview_images || [];
-        const paths = [];
-        for (let i = 0; i < previews.length; i++) {
-          const p = previews[i];
-          const ext = (p.filename.match(/\.(png|jpe?g|gif|webp|svg)$/i) || [])[1] || 'png';
-          const path = `skills/${id}/preview_${Date.now()}_${i}.${ext}`;
-          const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, p.buffer, {
-            contentType: p.mimeType || 'image/png',
-            upsert: true,
-          });
-          if (upErr) return err('preview upload failed: ' + upErr.message, 500);
-          paths.push(path);
-        }
-        await supabase.storage.from(BUCKET).remove(old.filter(Boolean));
-        updates.preview_images = paths;
-      }
+
       if (Object.keys(updates).length === 0) return err('nothing to update', 400);
       updates.updated_at = new Date().toISOString();
+
       const { data, error } = await supabase.from('skills').update(updates).eq('id', id).select().single();
       if (error) return err(error.message, 500);
       return json(data);

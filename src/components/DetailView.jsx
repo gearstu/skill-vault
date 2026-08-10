@@ -58,12 +58,12 @@ export default function DetailView({ skill, onClose, onDeleted, onChanged }) {
     setBusy(true);
     setError('');
     try {
-      const fd = new FormData();
-      fd.append('name', name.trim() || skill.name);
-      fd.append('description', description.trim());
-      fd.append('tags', tags);
-      for (const p of newPreviews) fd.append('preview', p, p.name);
-      const updated = await patchSkill(skill.id, fd);
+      const updated = await patchSkill(skill.id, {
+        name: name.trim() || skill.name,
+        description: description.trim(),
+        tags,
+        previews: newPreviews,
+      });
       onChanged(updated);
       setEditing(false);
       setNewPreviews([]);

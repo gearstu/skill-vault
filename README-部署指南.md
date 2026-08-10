@@ -5,8 +5,9 @@
 ## 技术栈
 
 - 前端：Vite + React（纯静态，部署 Netlify）
-- 后端：Netlify Functions（上传解压 zip、文件读取）
+- 后端：Netlify Functions（JSON 接口 + 服务端 zip 解压、文件读取）
 - 数据：Supabase Postgres（skills 表）+ Supabase Storage（zip / 预览图）
+- **大文件直传**：zip 和预览图由浏览器**直接上传到 Supabase Storage**（绕过 Netlify Functions 的请求体大小限制），Functions 只收小 JSON，再从 Storage 下载 zip 解析目录树
 
 ## 项目结构
 
@@ -62,9 +63,11 @@ netlify deploy --prod --build
 | `SUPABASE_URL` | Supabase Project URL | Functions |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role key | Functions |
 | `SKILL_BUCKET` | `skillvault`（默认，可省略） | Functions |
-| `VITE_SUPABASE_URL` | Supabase Project URL（**需以 VITE_ 开头**，构建时注入前端） | 前端显示预览图 |
+| `VITE_SUPABASE_URL` | Supabase Project URL（**需以 `VITE_` 开头**） | 前端（直传 Storage + 预览图） |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key（**需以 `VITE_` 开头**） | 前端（直传 Storage） |
 
-> `VITE_*` 变量会在构建时打进前端代码，因此必须手动在 Netlify 配置（不要提交进仓库）。
+> `VITE_*` 变量会在构建时打进前端代码，必须手动在 Netlify 配置（不要提交进仓库）。
+> `anon` key 在 Supabase **Settings → API**（`Project API keys` 的 `anon public` 行）。它是公开给前端的，配合 schema 里的公开 RLS 策略即可让浏览器直传 Storage。
 
 ### 4. 验证
 
@@ -92,10 +95,23 @@ netlify deploy --prod --build
 
 ## 限制与说明
 
-- zip 上传上限：约 **100MB**（Functions 的 busboy limits 配置）
-- 在线看文件是"按需解压"：每次查看单个文件会下载整个 zip 再取内容（skill 包一般 <20MB，秒级）
+- **上传大小**：zip 由浏览器直传 Supabase Storage（默认 50MB/文件，可在 Supabase 项目设置里调大），不再受 Netlify Functions 413 限制
+- **在线看文件**是"按需解压"：每次查看单个文件，Functions 从 Storage 下载 zip 再取内容（skill 包一般 <20MB，秒级）
 - 文本文件按扩展名 + 内容探测判断；二进制文件（非图片）会以 `application/octet-stream` 返回，浏览器可能直接下载
 - 图片预览支持 png/jpg/gif/webp/svg；svg 走文本（可查看源码）
+
+## 常见问题
+
+### 上传报 "HTTP 413"（Payload Too Large）
+- **原因**：旧版把 zip 塞进 Netlify Functions 请求体，Netlify 网关对 Functions 请求体有大小限制（几 MB 级），大 zip 直接 413。
+- **解决**：已改为**前端直传 Supabase Storage** 的架构（本版）。在 Netlify 环境变量里加上 `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`，**重新部署**即可。
+- **若仍 413**：确认部署的是新代码（`src/api.js` 里应有 `uploadToStorage`）；确认 `schema.sql` 已执行（storage 写入策略 `skillvault_public_insert` 生效）；检查浏览器 Network 面板，看请求是打到 `/api/skills`（JSON，应很小）还是 Storage 上传被拦。
+
+### 上传后列表没有新卡片 / 报 zip 相关错误
+- 查 Netlify 日志（Site → Functions → skills → View logs）：
+  - `zip not found in storage` → 直传没成功（anon key / bucket 策略问题）
+  - `invalid zip archive` → zip 损坏或不是标准 zip
+  - `db insert failed` → 数据库没建表（重新执行 `supabase/schema.sql`）
 
 ## 本地开发
 
